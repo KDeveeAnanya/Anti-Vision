@@ -1,0 +1,44 @@
+# Spring Application Configuration
+# This file is used to configure properties for the Spring Boot application, overriding default settings.
+
+spring:
+  application:
+    name: anti-vision-backend
+
+  # Database Connection Configuration
+  datasource:
+    # JDBC URL for PostgreSQL. 'localhost:5432' is the default host and port. 'antivision_db' is the database you created.
+    url: jdbc:postgresql://localhost:5432/antivision_db
+    # Database username and password
+    username: postgres
+    # NOTE: You may need to change this password to match your local PostgreSQL password
+    password: kdanu@501 
+    # The driver class name is usually auto-detected, but it's good practice to be explicit
+    driver-class-name: org.postgresql.Driver
+
+  # JPA / Hibernate Configuration
+  jpa:
+    # Updates the database schema automatically based on your entity classes.
+    # 'update' will create tables if they don't exist and alter them if properties change.
+    # Note: In a production environment, use database migration tools like Flyway or Liquibase instead.
+    hibernate:
+      ddl-auto: update
+    # Shows the generated SQL queries in the console for debugging purposes
+    show-sql: true
+    properties:
+      hibernate:
+        # Formats the SQL queries in the console to be more readable
+        format_sql: true
+        # Specifies the dialect so Hibernate can generate optimized SQL for PostgreSQL
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# Server Configuration
+server:
+  # The port on which the Spring Boot application will run
+  port: 8080
+
+# NVIDIA API Configuration
+nvidia:
+  api:
+    key: ${NVIDIA_API_KEY}
+    url: https://integrate.api.nvidia.com/v1/chat/completions
