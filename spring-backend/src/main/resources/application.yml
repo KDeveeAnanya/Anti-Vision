@@ -8,11 +8,11 @@ spring:
   # Database Connection Configuration
   datasource:
     # JDBC URL for PostgreSQL. 'localhost:5432' is the default host and port. 'antivision_db' is the database you created.
-    url: jdbc:postgresql://localhost:5432/antivision_db
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/antivision_db}
     # Database username and password
-    username: postgres
+    username: ${DB_USERNAME:postgres}
     # NOTE: You may need to change this password to match your local PostgreSQL password
-    password: kdanu@501 
+    password: ${DB_PASSWORD:kdanu@501}
     # The driver class name is usually auto-detected, but it's good practice to be explicit
     driver-class-name: org.postgresql.Driver
 
