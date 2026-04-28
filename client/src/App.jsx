@@ -15,7 +15,7 @@ function App() {
    * - response: Stores the JSON payload we get back from the Spring Boot backend.
    * - errorMsg: Stores human-readable error text if something fails.
    */
-  const [status, setStatus] = useState('IDLE'); 
+  const [status, setStatus] = useState('IDLE');
   const [input, setInput] = useState('');
   const [response, setResponse] = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
@@ -43,7 +43,7 @@ function App() {
 
     try {
       // The fetch() API is a modern browser feature for making network requests.
-      const res = await fetch('http://localhost:8080/api/reflections', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/reflections`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +58,7 @@ function App() {
       // Parse the JSON returned by Spring Boot (our RuleResponse DTO)
       const data = await res.json();
       setResponse(data);
-      
+
       // Transition to the result view
       setStatus('RESULT');
 
@@ -82,20 +82,20 @@ function App() {
    */
   return (
     <div className="relative min-h-screen bg-background text-textSoft flex items-center justify-center p-6">
-      
+
       {/* Absolute positioning for atmospheric background layers */}
       <div className="absolute inset-0 bg-neural-grid opacity-30 pointer-events-none"></div>
       <div className="bg-scanline"></div>
 
       {/* Main Content Container */}
       <div className="relative z-10 w-full max-w-2xl mx-auto flex flex-col items-center">
-        
+
         {/* =========================================
             STATE 1: INPUT VIEW ('IDLE')
             ========================================= */}
         {status === 'IDLE' && (
-          <form 
-            onSubmit={handleSubmit} 
+          <form
+            onSubmit={handleSubmit}
             className="w-full flex flex-col items-center animate-stagger-reveal"
           >
             <h1 className="text-3xl md:text-5xl font-light text-center tracking-tight mb-2 text-white/90 drop-shadow-md">
@@ -108,7 +108,7 @@ function App() {
             <div className="w-full relative group">
               {/* Subtle background glow effect */}
               <div className="absolute -inset-1 bg-accentViolet/10 rounded-xl blur-xl transition-all duration-1000 group-focus-within:bg-accentViolet/20 group-focus-within:blur-2xl"></div>
-              
+
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -118,8 +118,8 @@ function App() {
               />
             </div>
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={!input.trim()}
               className="mt-12 px-8 py-3 rounded-full bg-accentViolet/10 text-accentViolet font-mono text-sm tracking-widest border border-accentViolet/20 hover:bg-accentViolet hover:text-white hover:shadow-[0_0_20px_rgba(124,58,237,0.5)] transition-all duration-300 disabled:opacity-30 disabled:hover:bg-accentViolet/10 disabled:hover:text-accentViolet disabled:hover:shadow-none"
             >
@@ -148,7 +148,7 @@ function App() {
               System Failure
             </p>
             <p className="text-textMuted font-light mb-8">{errorMsg}</p>
-            <button 
+            <button
               onClick={handleReset}
               className="px-6 py-2 border border-white/10 rounded-full text-textSoft hover:bg-white/5 transition-colors font-mono text-xs"
             >
@@ -162,7 +162,7 @@ function App() {
             ========================================= */}
         {status === 'RESULT' && response && (
           <div className="w-full flex flex-col items-start w-full">
-            
+
             {/* Human Story Sentence */}
             <div className="w-full mb-14 animate-stagger-reveal stagger-1 opacity-0">
               <p className="text-2xl md:text-3xl font-light leading-relaxed text-white/90">
@@ -186,7 +186,7 @@ function App() {
               </p>
             </div>
 
-            <button 
+            <button
               onClick={handleReset}
               className="self-center px-6 py-2 border border-white/10 rounded-full text-textMuted hover:text-white hover:bg-white/5 hover:border-white/20 transition-all duration-300 font-mono text-xs tracking-widest animate-stagger-reveal opacity-0 [animation-delay:1.5s]"
             >
