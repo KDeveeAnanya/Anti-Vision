@@ -102,7 +102,7 @@ function App() {
               What do you never want to experience again?
             </h1>
             <p className="text-textMuted text-sm md:text-base font-light mb-12 tracking-wide">
-              Be honest. This is just for you.
+              Describe a past experience — what triggered it, what you did, and what happened.
             </p>
 
             <div className="w-full relative group">
@@ -113,7 +113,7 @@ function App() {
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="I felt anxious about work, so I..."
+                placeholder="e.g. I was so scared of failing that I avoided studying, which made things worse..."
                 className="relative w-full h-40 md:h-56 bg-black/40 backdrop-blur-sm border border-white/5 rounded-xl p-6 text-lg md:text-xl font-light leading-relaxed placeholder:text-white/10 focus:border-accentViolet/30 focus:animate-glow-pulse transition-all duration-500"
               />
             </div>
