@@ -47,8 +47,8 @@ public class RuleEngineService {
         this.objectMapper = objectMapper;
         // We initialize the HttpClient once to reuse connections efficiently
         this.httpClient = HttpClient.newBuilder()
-                .version(HttpClient.Version.HTTP_2)
-                .connectTimeout(Duration.ofSeconds(10))
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(Duration.ofSeconds(20))
                 .build();
     }
 
@@ -102,8 +102,10 @@ public class RuleEngineService {
         // Build the HTTP POST request with headers
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(nvidiaApiUrl))
+                .timeout(Duration.ofSeconds(60))
                 .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + nvidiaApiKey)
+                .header("Accept", "application/json")
+                .header("Authorization", "Bearer " + nvidiaApiKey.trim())
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
@@ -119,15 +121,47 @@ public class RuleEngineService {
             throw new RuntimeException("NVIDIA API error: " + response.body());
         }
 
-        // Parse the JSON response wrapper that NVIDIA returns (OpenAI format)
+        // Parse the JSON response wrapper that NVIDIA returns (OpenAI format).
         JsonNode rootNode = objectMapper.readTree(response.body());
-        String textResponse = rootNode.path("choices").get(0).path("message").path("content").asText();
-        
-        // Safety check: Clean up any potential markdown if the model disobeys the "no formatting" instruction
-        textResponse = textResponse.replaceAll("```json", "").replaceAll("```", "").trim();
+        JsonNode choices = rootNode.path("choices");
+        if (!choices.isArray() || choices.isEmpty()) {
+            throw new IllegalStateException("NVIDIA response did not contain choices: " + response.body());
+        }
 
-        // Jackson Magic: Deserialize the clean JSON string directly into our RuleResponse DTO
-        return objectMapper.readValue(textResponse, RuleResponse.class);
+        String textResponse = choices.get(0).path("message").path("content").asText(null);
+        if (textResponse == null || textResponse.isBlank()) {
+            throw new IllegalStateException("NVIDIA response did not contain message content: " + response.body());
+        }
+
+        // Models sometimes wrap JSON in markdown or add a short sentence before/after it.
+        // Extract the JSON object instead of requiring the response to be byte-for-byte JSON.
+        textResponse = extractJsonObject(textResponse);
+
+        RuleResponse result = objectMapper.readValue(textResponse, RuleResponse.class);
+        validateResult(result);
+        return result;
+    }
+
+
+    private String extractJsonObject(String text) {
+        String cleaned = text.replace("```json", "")
+                .replace("```", "")
+                .trim();
+
+        int start = cleaned.indexOf('{');
+        int end = cleaned.lastIndexOf('}');
+        if (start < 0 || end <= start) {
+            throw new IllegalStateException("NVIDIA returned non-JSON content: " + cleaned);
+        }
+        return cleaned.substring(start, end + 1);
+    }
+
+    private void validateResult(RuleResponse result) {
+        if (result.getTrigger() == null || result.getEmotion() == null
+                || result.getConsequence() == null || result.getPreventiveRule() == null
+                || result.getEarlyWarning() == null) {
+            throw new IllegalStateException("NVIDIA returned incomplete analysis: " + result);
+        }
     }
 
     private RuleResponse fallbackKeywordMatcher(String rawInput) {
