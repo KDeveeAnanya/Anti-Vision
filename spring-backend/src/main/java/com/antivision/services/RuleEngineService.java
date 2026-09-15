@@ -11,41 +11,26 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Service class responsible for the core logic of the Anti-Vision system.
- * It analyzes raw user input to extract behavioral patterns using the Gemini API,
- * with a fallback to basic keyword matching.
- */
 @Service
 public class RuleEngineService {
 
-    /**
-     * @Value tells Spring to look into application.yml for a property named 'gemini.api.key'
-     * and inject its value into this String variable.
-     */
     @Value("${nvidia.api.key}")
     private String nvidiaApiKey;
 
-    @Value("${nvidia.api.url}")
+    @Value("${nvidia.api.url:https://integrate.api.nvidia.com/v1/chat/completions}")
     private String nvidiaApiUrl;
 
-    // Jackson's ObjectMapper is the standard Java library for converting Objects to/from JSON.
-    private final ObjectMapper objectMapper;
-    // Java 11+ built-in modern HTTP client for making API requests.
-    private final HttpClient httpClient;
+    @Value("${nvidia.api.model:meta/llama-3.1-8b-instruct}")
+    private String nvidiaModel;
 
-    // Hardcoded keywords for the fallback mechanism
-    private static final List<String> TRIGGER_KEYWORDS = Arrays.asList("coffee", "late", "phone", "scrolling", "sugar", "alcohol", "tired");
-    private static final List<String> EMOTION_KEYWORDS = Arrays.asList("anxious", "sad", "angry", "stressed", "overwhelmed", "guilty");
-    private static final List<String> CONSEQUENCE_KEYWORDS = Arrays.asList("ruined", "stayed up", "missed", "failed", "headache", "brain fog", "wasted");
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
 
     public RuleEngineService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-        // We initialize the HttpClient once to reuse connections efficiently
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(20))
@@ -58,48 +43,55 @@ public class RuleEngineService {
         }
 
         try {
-            return callNvidiaApi(rawInput);
+            return callNvidiaApi(rawInput.trim());
         } catch (Exception e) {
-            System.err.println("--- DEBUG: CAUGHT EXCEPTION ---");
+            // Do NOT silently return the old keyword fallback. That made the UI look
+            // like the AI worked when the NVIDIA request actually failed.
+            System.err.println("--- NVIDIA AI ANALYSIS FAILED ---");
             e.printStackTrace(System.err);
-            System.err.println("--- DEBUG: FALLING BACK TO KEYWORD MATCHER ---");
-            return fallbackKeywordMatcher(rawInput);
+            throw new RuntimeException("NVIDIA AI analysis failed: " + e.getMessage(), e);
         }
     }
 
     private RuleResponse callNvidiaApi(String rawInput) throws Exception {
-        System.out.println("--- DEBUG: API KEY LOADED ---");
-        if (nvidiaApiKey == null || nvidiaApiKey.isEmpty()) {
-            System.out.println("API Key is NULL or EMPTY");
-        } else {
-            int len = Math.min(nvidiaApiKey.length(), 5);
-            System.out.println("API Key starts with: " + nvidiaApiKey.substring(0, len) + "...");
+        if (nvidiaApiKey == null || nvidiaApiKey.trim().isEmpty()
+                || "your_api_key_here".equals(nvidiaApiKey.trim())) {
+            throw new IllegalStateException("NVIDIA_API_KEY is missing or not configured");
         }
 
-        if ("your_api_key_here".equals(nvidiaApiKey)) {
-            throw new IllegalStateException("API key not configured. Using fallback.");
-        }
+        String systemPrompt = """
+                You are the behavior-analysis engine for Anti-Vision.
+                Analyze the user's reflection and return ONLY one valid JSON object.
+                Never return markdown, code fences, explanations, or extra text.
 
-        String systemPrompt = "You are a psychological behavior analyzer. Extract the following from the user's input: " +
-                "trigger, emotion, consequence, preventiveRule (an IF/THEN implementation intention), and earlyWarning (identifying the emotion as a red flag). " +
-                "Return ONLY a pure JSON object with exactly those 5 fields as string values. Do not include markdown formatting, backticks, or any conversational text.";
+                Required string fields:
+                - trigger: the specific situation, action, object, person, or context that tends to start the behavior
+                - emotion: the feeling immediately before or during the behavior
+                - consequence: the concrete negative result that followed
+                - preventiveRule: a practical IF/THEN implementation intention that prevents or interrupts the behavior
+                - earlyWarning: a short red-flag statement describing what the user should notice early
 
-        // Construct the NVIDIA API payload (OpenAI format)
+                Infer the most likely information from the reflection instead of returning "Unknown".
+                Keep every field specific to the user's actual reflection.
+                preventiveRule MUST start with "IF" and contain "THEN".
+
+                JSON shape:
+                {"trigger":"...","emotion":"...","consequence":"...","preventiveRule":"IF ... THEN ...","earlyWarning":"..."}
+                """;
+
         Map<String, Object> payload = Map.of(
-                "model", "meta/llama-3.1-8b-instruct",
+                "model", nvidiaModel,
                 "messages", List.of(
                         Map.of("role", "system", "content", systemPrompt),
                         Map.of("role", "user", "content", rawInput)
                 ),
                 "temperature", 0.2,
-                "max_tokens", 1024,
+                "max_tokens", 700,
                 "stream", false
         );
 
-        // Convert the Java Map into a JSON String
         String requestBody = objectMapper.writeValueAsString(payload);
 
-        // Build the HTTP POST request with headers
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(nvidiaApiUrl))
                 .timeout(Duration.ofSeconds(60))
@@ -109,94 +101,76 @@ public class RuleEngineService {
                 .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                 .build();
 
-        // Send the request synchronously
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        
-        System.out.println("--- DEBUG: RAW NVIDIA API RESPONSE ---");
+        System.out.println("--- NVIDIA REQUEST ---");
+        System.out.println("Model: " + nvidiaModel);
+        System.out.println("URL: " + nvidiaApiUrl);
+
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+        );
+
+        System.out.println("--- NVIDIA RESPONSE ---");
         System.out.println("Status Code: " + response.statusCode());
         System.out.println("Response Body: " + response.body());
-        System.out.println("--------------------------------------");
+        System.out.println("-----------------------");
 
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("NVIDIA API error: " + response.body());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new RuntimeException(
+                    "NVIDIA API returned HTTP " + response.statusCode() + ": " + response.body()
+            );
         }
 
-        // Parse the JSON response wrapper that NVIDIA returns (OpenAI format).
-        JsonNode rootNode = objectMapper.readTree(response.body());
-        JsonNode choices = rootNode.path("choices");
+        JsonNode root = objectMapper.readTree(response.body());
+        JsonNode choices = root.path("choices");
+
         if (!choices.isArray() || choices.isEmpty()) {
-            throw new IllegalStateException("NVIDIA response did not contain choices: " + response.body());
+            throw new IllegalStateException("NVIDIA response has no choices");
         }
 
-        String textResponse = choices.get(0).path("message").path("content").asText(null);
-        if (textResponse == null || textResponse.isBlank()) {
-            throw new IllegalStateException("NVIDIA response did not contain message content: " + response.body());
+        JsonNode message = choices.get(0).path("message");
+        String content = message.path("content").asText(null);
+
+        if (content == null || content.isBlank()) {
+            throw new IllegalStateException("NVIDIA response has no message content");
         }
 
-        // Models sometimes wrap JSON in markdown or add a short sentence before/after it.
-        // Extract the JSON object instead of requiring the response to be byte-for-byte JSON.
-        textResponse = extractJsonObject(textResponse);
-
-        RuleResponse result = objectMapper.readValue(textResponse, RuleResponse.class);
+        String json = extractJsonObject(content);
+        RuleResponse result = objectMapper.readValue(json, RuleResponse.class);
         validateResult(result);
+
         return result;
     }
 
-
-    private String extractJsonObject(String text) {
-        String cleaned = text.replace("```json", "")
+    private String extractJsonObject(String content) {
+        String cleaned = content
+                .replace("```json", "")
+                .replace("```JSON", "")
                 .replace("```", "")
                 .trim();
 
         int start = cleaned.indexOf('{');
         int end = cleaned.lastIndexOf('}');
+
         if (start < 0 || end <= start) {
             throw new IllegalStateException("NVIDIA returned non-JSON content: " + cleaned);
         }
+
         return cleaned.substring(start, end + 1);
     }
 
     private void validateResult(RuleResponse result) {
-        if (result.getTrigger() == null || result.getEmotion() == null
-                || result.getConsequence() == null || result.getPreventiveRule() == null
-                || result.getEarlyWarning() == null) {
-            throw new IllegalStateException("NVIDIA returned incomplete analysis: " + result);
+        if (result == null
+                || isBlank(result.getTrigger())
+                || isBlank(result.getEmotion())
+                || isBlank(result.getConsequence())
+                || isBlank(result.getPreventiveRule())
+                || isBlank(result.getEarlyWarning())) {
+            throw new IllegalStateException("NVIDIA returned an incomplete analysis");
         }
     }
 
-    private RuleResponse fallbackKeywordMatcher(String rawInput) {
-        String lowerInput = rawInput.toLowerCase();
-
-        String trigger = extractKeyword(lowerInput, TRIGGER_KEYWORDS, "Unknown Trigger");
-        String emotion = extractKeyword(lowerInput, EMOTION_KEYWORDS, "Unknown Emotion");
-        String consequence = extractKeyword(lowerInput, CONSEQUENCE_KEYWORDS, "Unknown Consequence");
-
-        String preventiveRule = generatePreventiveRule(trigger, consequence);
-        String earlyWarning = generateEarlyWarning(emotion, trigger);
-
-        return new RuleResponse(trigger, emotion, consequence, preventiveRule, earlyWarning);
-    }
-
-    private String extractKeyword(String input, List<String> dictionary, String defaultResult) {
-        for (String keyword : dictionary) {
-            if (input.contains(keyword)) {
-                return keyword;
-            }
-        }
-        return defaultResult;
-    }
-
-    private String generatePreventiveRule(String trigger, String consequence) {
-        if ("Unknown Trigger".equals(trigger)) {
-            return "Need more specific trigger to generate a rule.";
-        }
-        return "IF I am tempted by [" + trigger + "], THEN I will immediately step away for 5 minutes to avoid [" + consequence + "].";
-    }
-
-    private String generateEarlyWarning(String emotion, String trigger) {
-        if ("Unknown Emotion".equals(emotion)) {
-            return "Try to identify how you felt right before this happened.";
-        }
-        return "Red Flag: When I feel [" + emotion + "], my brain will likely seek out [" + trigger + "] as a coping mechanism.";
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }
