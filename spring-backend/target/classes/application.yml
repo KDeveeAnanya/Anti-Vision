@@ -41,4 +41,5 @@ server:
 nvidia:
   api:
     key: ${NVIDIA_API_KEY}
-    url: https://integrate.api.nvidia.com/v1/chat/completions
+    url: ${NVIDIA_API_URL:https://integrate.api.nvidia.com/v1/chat/completions}
+    model: ${NVIDIA_MODEL}
