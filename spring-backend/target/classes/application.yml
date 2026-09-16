@@ -42,3 +42,4 @@ nvidia:
   api:
     key: ${NVIDIA_API_KEY}
     url: https://integrate.api.nvidia.com/v1/chat/completions
+    model: ${NVIDIA_MODEL:mistralai/mistral-large-2-instruct}
