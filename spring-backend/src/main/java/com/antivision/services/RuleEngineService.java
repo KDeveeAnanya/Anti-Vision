@@ -23,7 +23,7 @@ public class RuleEngineService {
     @Value("${nvidia.api.url:https://integrate.api.nvidia.com/v1/chat/completions}")
     private String nvidiaApiUrl;
 
-    @Value("${nvidia.api.model:mistralai/mistral-large-2-instruct}")
+    @Value("${nvidia.api.model}")
     private String nvidiaModel;
 
     private final ObjectMapper objectMapper;
