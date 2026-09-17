@@ -25,8 +25,7 @@ public class RuleEngineService {
     private static final String NVIDIA_API_URL =
             "https://integrate.api.nvidia.com/v1/chat/completions";
 
-    private static final String NVIDIA_MODEL =
-        "openai/gpt-oss-20b";
+        private static final String NVIDIA_MODEL = "openai/gpt-oss-20b";
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
