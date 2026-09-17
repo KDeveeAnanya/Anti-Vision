@@ -21,52 +21,81 @@ public class RuleEngineService {
     @Value("${nvidia.api.key}")
     private String nvidiaApiKey;
 
-    // Keep NVIDIA configuration directly here.
+    // NVIDIA configuration kept here for later AI integration.
     private static final String NVIDIA_API_URL =
             "https://integrate.api.nvidia.com/v1/chat/completions";
 
-        private static final String NVIDIA_MODEL = "openai/gpt-oss-20b";
+    private static final String NVIDIA_MODEL =
+            "openai/gpt-oss-20b";
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
     public RuleEngineService(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
+
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
                 .connectTimeout(Duration.ofSeconds(20))
                 .build();
     }
 
-        public RuleResponse analyzeInput(String rawInput) {
-    if (rawInput == null || rawInput.trim().isEmpty()) {
-        throw new IllegalArgumentException("Input cannot be empty");
-    }
+    public RuleResponse analyzeInput(String rawInput) {
 
-    try {
-        return callNvidiaApi(rawInput.trim());
-    } catch (Exception e) {
-        System.err.println("--- NVIDIA FAILED - USING LOCAL ANALYSIS ---");
-        System.err.println(e.getMessage());
+        if (rawInput == null || rawInput.trim().isEmpty()) {
+            throw new IllegalArgumentException("Input cannot be empty");
+        }
 
         String input = rawInput.trim().toLowerCase();
 
-        String trigger = "A situation that led to the behavior";
-        String emotion = "Stress or discomfort";
-        String consequence = "The behavior prevented you from focusing on what mattered";
+        String trigger =
+                "A situation that led to the behavior";
 
-        if (input.contains("scroll") || input.contains("instagram") || input.contains("phone")) {
-            trigger = "Using the phone when intending to work or study";
-            emotion = "Boredom or avoidance";
-            consequence = "Time was lost and the important task was delayed";
-        } else if (input.contains("procrast")) {
-            trigger = "Facing a task that feels difficult or uncomfortable";
-            emotion = "Overwhelm or avoidance";
-            consequence = "The task was postponed and pressure increased";
-        } else if (input.contains("late") || input.contains("sleep")) {
-            trigger = "Staying engaged with activities late at night";
-            emotion = "Difficulty disengaging";
-            consequence = "Sleep was delayed and the next day was affected";
+        String emotion =
+                "Stress or discomfort";
+
+        String consequence =
+                "The behavior prevented you from focusing on what mattered";
+
+        if (input.contains("scroll")
+                || input.contains("instagram")
+                || input.contains("phone")
+                || input.contains("social media")) {
+
+            trigger =
+                    "Using the phone or social media when intending to work or study";
+
+            emotion =
+                    "Boredom or avoidance";
+
+            consequence =
+                    "Time was lost and the important task was delayed";
+
+        } else if (input.contains("procrast")
+                || input.contains("postpone")
+                || input.contains("delay")) {
+
+            trigger =
+                    "Facing a task that feels difficult or uncomfortable";
+
+            emotion =
+                    "Overwhelm or avoidance";
+
+            consequence =
+                    "The task was postponed and pressure increased";
+
+        } else if (input.contains("late")
+                || input.contains("sleep")
+                || input.contains("night")) {
+
+            trigger =
+                    "Staying engaged with activities late at night";
+
+            emotion =
+                    "Difficulty disengaging";
+
+            consequence =
+                    "Sleep was delayed and the next day was affected";
         }
 
         String preventiveRule =
@@ -83,8 +112,12 @@ public class RuleEngineService {
                 earlyWarning
         );
     }
-}
 
+    /*
+     * NVIDIA AI integration is kept here for future use.
+     * It is currently not called by analyzeInput(), so the application
+     * does not depend on NVIDIA availability for the live demo.
+     */
     private RuleResponse callNvidiaApi(String rawInput) throws Exception {
 
         if (nvidiaApiKey == null
@@ -146,8 +179,7 @@ public class RuleEngineService {
                         "Bearer " + nvidiaApiKey.trim()
                 )
                 .POST(
-                        HttpRequest.BodyPublishers
-                                .ofString(requestBody)
+                        HttpRequest.BodyPublishers.ofString(requestBody)
                 )
                 .build();
 
@@ -227,8 +259,7 @@ public class RuleEngineService {
 
         if (start < 0 || end <= start) {
             throw new IllegalStateException(
-                    "NVIDIA returned non-JSON content: "
-                            + cleaned
+                    "NVIDIA returned non-JSON content: " + cleaned
             );
         }
 
@@ -251,7 +282,6 @@ public class RuleEngineService {
     }
 
     private boolean isBlank(String value) {
-        return value == null
-                || value.trim().isEmpty();
+        return value == null || value.trim().isEmpty();
     }
 }
