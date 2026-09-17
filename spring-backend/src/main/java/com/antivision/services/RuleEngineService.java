@@ -38,21 +38,52 @@ public class RuleEngineService {
                 .build();
     }
 
-    public RuleResponse analyzeInput(String rawInput) {
-        if (rawInput == null || rawInput.trim().isEmpty()) {
-            throw new IllegalArgumentException("Input cannot be empty");
+        public RuleResponse analyzeInput(String rawInput) {
+    if (rawInput == null || rawInput.trim().isEmpty()) {
+        throw new IllegalArgumentException("Input cannot be empty");
+    }
+
+    try {
+        return callNvidiaApi(rawInput.trim());
+    } catch (Exception e) {
+        System.err.println("--- NVIDIA FAILED - USING LOCAL ANALYSIS ---");
+        System.err.println(e.getMessage());
+
+        String input = rawInput.trim().toLowerCase();
+
+        String trigger = "A situation that led to the behavior";
+        String emotion = "Stress or discomfort";
+        String consequence = "The behavior prevented you from focusing on what mattered";
+
+        if (input.contains("scroll") || input.contains("instagram") || input.contains("phone")) {
+            trigger = "Using the phone when intending to work or study";
+            emotion = "Boredom or avoidance";
+            consequence = "Time was lost and the important task was delayed";
+        } else if (input.contains("procrast")) {
+            trigger = "Facing a task that feels difficult or uncomfortable";
+            emotion = "Overwhelm or avoidance";
+            consequence = "The task was postponed and pressure increased";
+        } else if (input.contains("late") || input.contains("sleep")) {
+            trigger = "Staying engaged with activities late at night";
+            emotion = "Difficulty disengaging";
+            consequence = "Sleep was delayed and the next day was affected";
         }
 
-        try {
-            return callNvidiaApi(rawInput.trim());
-        } catch (Exception e) {
-            System.err.println("--- NVIDIA AI ANALYSIS FAILED ---");
-            e.printStackTrace(System.err);
-            throw new RuntimeException(
-                    "NVIDIA AI analysis failed: " + e.getMessage(), e
-            );
-        }
+        String preventiveRule =
+                "IF I notice this behavior starting, THEN I will pause and take one small action toward my intended task.";
+
+        String earlyWarning =
+                "Notice the first urge to avoid the task or continue the distracting behavior.";
+
+        return new RuleResponse(
+                trigger,
+                emotion,
+                consequence,
+                preventiveRule,
+                earlyWarning
+        );
     }
+}
 
     private RuleResponse callNvidiaApi(String rawInput) throws Exception {
 
