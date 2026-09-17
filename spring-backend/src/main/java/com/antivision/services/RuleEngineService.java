@@ -17,14 +17,16 @@ import java.util.Map;
 @Service
 public class RuleEngineService {
 
+    // Keep the secret in Render environment variables.
     @Value("${nvidia.api.key}")
     private String nvidiaApiKey;
 
-    @Value("${nvidia.api.url:https://integrate.api.nvidia.com/v1/chat/completions}")
-    private String nvidiaApiUrl;
+    // Keep NVIDIA configuration directly here.
+    private static final String NVIDIA_API_URL =
+            "https://integrate.api.nvidia.com/v1/chat/completions";
 
-    @Value("${nvidia.api.model}")
-    private String nvidiaModel;
+    private static final String NVIDIA_MODEL =
+            "mistralai/mistral-large-2-instruct";
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
@@ -45,18 +47,23 @@ public class RuleEngineService {
         try {
             return callNvidiaApi(rawInput.trim());
         } catch (Exception e) {
-            // Do NOT silently return the old keyword fallback. That made the UI look
-            // like the AI worked when the NVIDIA request actually failed.
             System.err.println("--- NVIDIA AI ANALYSIS FAILED ---");
             e.printStackTrace(System.err);
-            throw new RuntimeException("NVIDIA AI analysis failed: " + e.getMessage(), e);
+            throw new RuntimeException(
+                    "NVIDIA AI analysis failed: " + e.getMessage(), e
+            );
         }
     }
 
     private RuleResponse callNvidiaApi(String rawInput) throws Exception {
-        if (nvidiaApiKey == null || nvidiaApiKey.trim().isEmpty()
+
+        if (nvidiaApiKey == null
+                || nvidiaApiKey.trim().isEmpty()
                 || "your_api_key_here".equals(nvidiaApiKey.trim())) {
-            throw new IllegalStateException("NVIDIA_API_KEY is missing or not configured");
+
+            throw new IllegalStateException(
+                    "NVIDIA_API_KEY is missing or not configured"
+            );
         }
 
         String systemPrompt = """
@@ -80,30 +87,43 @@ public class RuleEngineService {
                 """;
 
         Map<String, Object> payload = Map.of(
-                "model", nvidiaModel,
+                "model", NVIDIA_MODEL,
                 "messages", List.of(
-                        Map.of("role", "system", "content", systemPrompt),
-                        Map.of("role", "user", "content", rawInput)
+                        Map.of(
+                                "role", "system",
+                                "content", systemPrompt
+                        ),
+                        Map.of(
+                                "role", "user",
+                                "content", rawInput
+                        )
                 ),
                 "temperature", 0.2,
                 "max_tokens", 700,
                 "stream", false
         );
 
-        String requestBody = objectMapper.writeValueAsString(payload);
+        String requestBody =
+                objectMapper.writeValueAsString(payload);
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(nvidiaApiUrl))
+                .uri(URI.create(NVIDIA_API_URL))
                 .timeout(Duration.ofSeconds(60))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
-                .header("Authorization", "Bearer " + nvidiaApiKey.trim())
-                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .header(
+                        "Authorization",
+                        "Bearer " + nvidiaApiKey.trim()
+                )
+                .POST(
+                        HttpRequest.BodyPublishers
+                                .ofString(requestBody)
+                )
                 .build();
 
         System.out.println("--- NVIDIA REQUEST ---");
-        System.out.println("Model: " + nvidiaModel);
-        System.out.println("URL: " + nvidiaApiUrl);
+        System.out.println("Model: " + NVIDIA_MODEL);
+        System.out.println("URL: " + NVIDIA_API_URL);
 
         HttpResponse<String> response = httpClient.send(
                 request,
@@ -115,34 +135,57 @@ public class RuleEngineService {
         System.out.println("Response Body: " + response.body());
         System.out.println("-----------------------");
 
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        if (response.statusCode() < 200
+                || response.statusCode() >= 300) {
+
             throw new RuntimeException(
-                    "NVIDIA API returned HTTP " + response.statusCode() + ": " + response.body()
+                    "NVIDIA API returned HTTP "
+                            + response.statusCode()
+                            + ": "
+                            + response.body()
             );
         }
 
-        JsonNode root = objectMapper.readTree(response.body());
-        JsonNode choices = root.path("choices");
+        JsonNode root =
+                objectMapper.readTree(response.body());
+
+        JsonNode choices =
+                root.path("choices");
 
         if (!choices.isArray() || choices.isEmpty()) {
-            throw new IllegalStateException("NVIDIA response has no choices");
+            throw new IllegalStateException(
+                    "NVIDIA response has no choices"
+            );
         }
 
-        JsonNode message = choices.get(0).path("message");
-        String content = message.path("content").asText(null);
+        JsonNode message =
+                choices.get(0).path("message");
+
+        String content =
+                message.path("content").asText(null);
 
         if (content == null || content.isBlank()) {
-            throw new IllegalStateException("NVIDIA response has no message content");
+            throw new IllegalStateException(
+                    "NVIDIA response has no message content"
+            );
         }
 
-        String json = extractJsonObject(content);
-        RuleResponse result = objectMapper.readValue(json, RuleResponse.class);
+        String json =
+                extractJsonObject(content);
+
+        RuleResponse result =
+                objectMapper.readValue(
+                        json,
+                        RuleResponse.class
+                );
+
         validateResult(result);
 
         return result;
     }
 
     private String extractJsonObject(String content) {
+
         String cleaned = content
                 .replace("```json", "")
                 .replace("```JSON", "")
@@ -153,24 +196,32 @@ public class RuleEngineService {
         int end = cleaned.lastIndexOf('}');
 
         if (start < 0 || end <= start) {
-            throw new IllegalStateException("NVIDIA returned non-JSON content: " + cleaned);
+            throw new IllegalStateException(
+                    "NVIDIA returned non-JSON content: "
+                            + cleaned
+            );
         }
 
         return cleaned.substring(start, end + 1);
     }
 
     private void validateResult(RuleResponse result) {
+
         if (result == null
                 || isBlank(result.getTrigger())
                 || isBlank(result.getEmotion())
                 || isBlank(result.getConsequence())
                 || isBlank(result.getPreventiveRule())
                 || isBlank(result.getEarlyWarning())) {
-            throw new IllegalStateException("NVIDIA returned an incomplete analysis");
+
+            throw new IllegalStateException(
+                    "NVIDIA returned an incomplete analysis"
+            );
         }
     }
 
     private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
+        return value == null
+                || value.trim().isEmpty();
     }
 }
