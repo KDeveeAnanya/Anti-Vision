@@ -26,7 +26,7 @@ public class RuleEngineService {
             "https://integrate.api.nvidia.com/v1/chat/completions";
 
     private static final String NVIDIA_MODEL =
-            "mistralai/mistral-large-2-instruct";
+        "openai/gpt-oss-20b";
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
